@@ -1,0 +1,1198 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>VirtualFit: Spatial Try-On</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+:root{
+  --room:url("https://images.higgs.ai/?default=1&output=webp&url=https%3A%2F%2Fd8j0ntlcm91z4.cloudfront.net%2Fuser_38xzZboKViGWJOttwIXH07lWA1P%2Fhf_20261104_080623_c94c85a3-23d5-4a0c-afff-41be1b5b8191.png&w=2400&q=85");
+  --model:url("https://images.higgs.ai/?default=1&output=webp&url=https%3A%2F%2Fd8j0ntlcm91z4.cloudfront.net%2Fuser_38xzZboKViGWJOttwIXH07lWA1P%2Fhf_20261104_080717_e02cb856-b812-4c9b-9b86-8a741c7f65eb.png&w=2688&q=85");
+  --garm:url("https://images.higgs.ai/?default=1&output=webp&url=https%3A%2F%2Fd8j0ntlcm91z4.cloudfront.net%2Fuser_38xzZboKViGWJOttwIXH07lWA1P%2Fhf_20261104_080719_f5a4cca2-cf42-4957-ab3b-ddec34d2b71a.png&w=2048&q=85");
+  --ink:#1d1f22;
+  --soft:rgba(29,31,34,.55);
+  --glass:rgba(246,244,240,.26);
+  --glass-hi:rgba(255,255,255,.55);
+  --edge:rgba(255,255,255,.62);
+  --ease:cubic-bezier(.2,.8,.2,1);
+  --sans:"Inter",system-ui,-apple-system,sans-serif;
+  --MH:min(78vh,62vw);
+  --CW:min(14.8vw,33vh);
+  --tee-color:#f4f2ee;
+}
+
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{
+  background:#e9e4dc;
+  color:#fff;
+  font-family:var(--sans);
+  overflow:hidden;
+  -webkit-font-smoothing:antialiased;
+  user-select:none;
+}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+@media (pointer:fine){html,body,button{cursor:none}}
+
+/* Room */
+.room{
+  position:fixed;
+  inset:-3%;
+  background:var(--room) center/cover no-repeat;
+  filter:blur(2.5px) saturate(1.05);
+  transform:scale(1.08);
+  will-change:transform;
+  z-index:1;
+}
+.room::after{
+  content:"";
+  position:absolute;
+  inset:0;
+  background:radial-gradient(70% 60% at 50% 45%,rgba(255,252,246,.10),rgba(40,30,20,.16));
+}
+
+/* Ghost word */
+.ghost{
+  position:fixed;
+  left:50%;
+  top:calc(50% - var(--MH)*.42);
+  transform:translate(-50%,0);
+  z-index:2;
+  pointer-events:none;
+  font:900 calc(var(--MH)*.42)/.8 var(--sans);
+  letter-spacing:-.04em;
+  color:rgba(255,255,255,.3);
+  text-shadow:0 1px 0 rgba(255,255,255,.35);
+  -webkit-text-stroke:1px rgba(255,255,255,.35);
+  white-space:nowrap;
+}
+.ghost span{display:inline-block;will-change:transform}
+
+/* Shared glass material */
+.glass{
+  background:linear-gradient(155deg,rgba(250,248,245,.30),rgba(150,144,136,.20) 48%,rgba(205,200,192,.24));
+  -webkit-backdrop-filter:blur(22px) saturate(1.5);
+  backdrop-filter:blur(22px) saturate(1.5);
+  border:1px solid rgba(255,255,255,.5);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.7),
+    inset 0 -1px 0 rgba(255,255,255,.12),
+    0 20px 50px -24px rgba(40,30,20,.45);
+}
+
+/* Tabs */
+.tabs{
+  position:fixed;
+  left:50%;
+  top:4.2vh;
+  transform:translateX(-50%);
+  z-index:30;
+  display:flex;
+  gap:2px;
+  padding:5px;
+  border-radius:999px;
+  max-width:calc(100vw - 24px);
+  overflow-x:auto;
+  scrollbar-width:none;
+}
+.tabs::-webkit-scrollbar{display:none}
+.tabs button{
+  position:relative;
+  z-index:1;
+  height:38px;
+  padding:0 22px;
+  border-radius:999px;
+  font:500 14px/1 var(--sans);
+  color:rgba(30,30,32,.72);
+  transition:color .4s var(--ease);
+  white-space:nowrap;
+}
+.tabs button.on{color:#111}
+.tabs .pill{
+  position:absolute;
+  top:5px;
+  left:0;
+  height:38px;
+  border-radius:999px;
+  background:rgba(255,255,255,.92);
+  box-shadow:0 4px 14px -6px rgba(0,0,0,.3);
+  transition:transform .6s var(--ease),width .6s var(--ease);
+  pointer-events:none;
+}
+
+/* Left rail */
+.rail{
+  position:fixed;
+  left:max(18px,1.8vw);
+  top:50%;
+  transform:translateY(-50%);
+  z-index:30;
+  display:grid;
+  gap:10px;
+  padding:8px;
+  border-radius:999px;
+}
+.rail button{
+  width:42px;
+  height:42px;
+  border-radius:50%;
+  display:grid;
+  place-items:center;
+  color:rgba(30,30,32,.8);
+  transition:background-color .4s var(--ease),transform .4s var(--ease),color .4s var(--ease);
+}
+.rail button.on{
+  background:rgba(255,255,255,.9);
+  color:#111;
+  box-shadow:0 4px 12px -6px rgba(0,0,0,.35);
+}
+.rail button:not(.on):hover{background:rgba(255,255,255,.35)}
+.rail svg{width:20px;height:20px}
+
+/* Stage & 3D Arc */
+.stage{
+  position:fixed;
+  inset:0;
+  z-index:10;
+  touch-action:pan-y;
+  display:grid;
+  place-items:center;
+}
+.arc{
+  position:relative;
+  width:0;
+  height:0;
+}
+
+.card{
+  position:absolute;
+  left:0;
+  top:0;
+  width:var(--CW);
+  height:calc(var(--CW)*1.42);
+  margin-left:calc(var(--CW)*-.5);
+  margin-top:calc(var(--CW)*-.71);
+  border-radius:22px;
+  overflow:hidden;
+  will-change:transform,opacity,filter;
+}
+.card .tee-bg{
+  position:absolute;
+  inset:0;
+  background:var(--tee-color);
+  opacity:.52;
+  transition:background-color .35s var(--ease);
+}
+.card .g{
+  position:absolute;
+  left:8%;
+  right:8%;
+  top:5%;
+  height:66%;
+  display:grid;
+  place-items:center;
+  filter:drop-shadow(0 14px 14px rgba(40,30,20,.22));
+  pointer-events:none;
+}
+.card .g img{
+  max-width:100%;
+  max-height:100%;
+  width:auto;
+  height:auto;
+  object-fit:contain;
+  border-radius:10px;
+}
+.card .name{
+  position:absolute;
+  left:8%;
+  right:8%;
+  bottom:17%;
+  font:500 calc(var(--CW)*.068)/1.15 var(--sans);
+  text-align:center;
+  color:#fff;
+  text-shadow:0 1px 8px rgba(0,0,0,.28);
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  pointer-events:none;
+}
+.card .price{
+  position:absolute;
+  left:8%;
+  right:8%;
+  bottom:7%;
+  font:700 calc(var(--CW)*.095)/1.1 var(--sans);
+  text-align:center;
+  color:#fff;
+  text-shadow:0 1px 8px rgba(0,0,0,.28);
+  pointer-events:none;
+}
+.card .sheen{
+  position:absolute;
+  inset:0;
+  background:linear-gradient(105deg,transparent 40%,rgba(255,255,255,.5) 50%,transparent 60%);
+  transform:translateX(-140%);
+  pointer-events:none;
+}
+.card.sheen-run .sheen{
+  animation:sheenSweep 1s var(--ease) forwards;
+}
+@keyframes sheenSweep{
+  0%{transform:translateX(-140%);opacity:0}
+  20%{opacity:1}
+  100%{transform:translateX(140%);opacity:0}
+}
+
+/* Model & try-on scan */
+.model{
+  position:fixed;
+  left:50%;
+  bottom:0;
+  transform:translateX(-50%);
+  height:var(--MH);
+  aspect-ratio:524/1360;
+  z-index:50;
+  pointer-events:none;
+}
+.outfit{
+  position:absolute;
+  inset:0;
+  will-change:clip-path,transform,opacity;
+}
+.outfit .base-figure{
+  position:absolute;
+  inset:0;
+  background-image:var(--model);
+  background-size:513% 111.76%;
+  background-position-y:100%;
+  background-repeat:no-repeat;
+}
+/* Chest print overlay aligned to the t-shirt torso on the model */
+.outfit .chest-print{
+  position:absolute;
+  left:50%;
+  top:33.5%;
+  width:24%;
+  height:21%;
+  transform:translateX(-50%);
+  display:grid;
+  place-items:center;
+  pointer-events:none;
+}
+.outfit .chest-print img{
+  max-width:100%;
+  max-height:100%;
+  object-fit:contain;
+  border-radius:4px;
+  filter:drop-shadow(0 2px 4px rgba(0,0,0,.22));
+}
+#mCur{opacity:0}
+
+.grid{
+  position:absolute;
+  inset:0;
+  background:repeating-linear-gradient(0deg,transparent 0 5px,rgba(255,255,255,.22) 5px 6px);
+  mix-blend-mode:screen;
+  clip-path:inset(0 0 100% 0);
+  pointer-events:none;
+  will-change:clip-path;
+}
+.scan{
+  position:absolute;
+  left:-14%;
+  right:-14%;
+  top:0%;
+  height:2px;
+  opacity:0;
+  transform:scaleX(.2);
+  background:linear-gradient(90deg,transparent,#fff 18%,#fff 82%,transparent);
+  box-shadow:0 0 18px 4px rgba(255,255,255,.75),0 0 60px 10px rgba(190,225,255,.45);
+  pointer-events:none;
+  will-change:top,transform,opacity;
+}
+.scan::after{
+  content:"";
+  position:absolute;
+  left:10%;
+  right:10%;
+  bottom:0;
+  height:calc(var(--MH)*.12);
+  background:linear-gradient(to top,rgba(220,238,255,.32),transparent);
+  pointer-events:none;
+}
+
+/* Arrows */
+.arrow{
+  position:fixed;
+  top:50%;
+  transform:translateY(-50%);
+  z-index:40;
+  width:46px;
+  height:46px;
+  border-radius:50%;
+  display:grid;
+  place-items:center;
+  color:#222;
+  transition:transform .4s var(--ease),background-color .35s var(--ease);
+}
+.arrow:hover{background:rgba(255,255,255,.42)}
+.arrow.prev{left:calc(max(18px,1.8vw) + 76px)}
+.arrow.next{right:max(18px,1.8vw)}
+.arrow svg{width:16px;height:16px}
+
+/* Buy card */
+.buy{
+  position:fixed;
+  left:50%;
+  bottom:4.6vh;
+  transform:translateX(-50%);
+  z-index:60;
+  width:min(640px,calc(100vw - 32px));
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:22px;
+  padding:12px 22px 12px 12px;
+  border-radius:24px;
+  color:#fff;
+  text-shadow:0 1px 6px rgba(0,0,0,.18);
+}
+.buy-left{
+  display:flex;
+  align-items:center;
+  gap:14px;
+  min-width:0;
+}
+.thumb{
+  position:relative;
+  flex:0 0 64px;
+  width:64px;
+  height:64px;
+  border-radius:14px;
+  background:rgba(255,255,255,.3);
+  overflow:hidden;
+}
+.thumb-inner{
+  position:absolute;
+  inset:6px;
+  display:grid;
+  place-items:center;
+  will-change:transform,opacity;
+}
+.thumb-inner img{
+  max-width:100%;
+  max-height:100%;
+  object-fit:contain;
+  border-radius:6px;
+}
+.info{min-width:0}
+.ln{
+  position:relative;
+  height:1.15em;
+  overflow:hidden;
+}
+.ln .roll-text{
+  display:block;
+  will-change:transform;
+}
+.ln .roll-out{
+  position:absolute;
+  inset:0;
+  display:block;
+  will-change:transform;
+}
+.info .title-ln{font:600 16px/1.15 var(--sans)}
+.info .price-ln{font:500 14px/1.15 var(--sans);opacity:.9;margin-top:2px}
+
+.buy-controls{
+  display:flex;
+  align-items:center;
+  gap:20px;
+}
+.group-label{
+  font:500 12px/1.15 var(--sans);
+  opacity:.85;
+  margin-bottom:6px;
+}
+.sizes{display:flex;gap:6px}
+.size-chip{
+  width:30px;
+  height:30px;
+  border-radius:50%;
+  background:rgba(255,255,255,.22);
+  color:#fff;
+  font:600 11px/1 var(--sans);
+  display:grid;
+  place-items:center;
+  transition:background-color .3s var(--ease),color .3s var(--ease),transform .25s var(--ease);
+}
+.size-chip.on{
+  background:#fff;
+  color:#111;
+}
+.size-chip:active{transform:scale(.9)}
+
+.dots{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  height:30px;
+}
+.dot{
+  width:18px;
+  height:18px;
+  border-radius:50%;
+  transition:transform .3s var(--ease),box-shadow .3s var(--ease);
+}
+.dot.on{
+  box-shadow:0 0 0 2px rgba(255,255,255,.95),0 0 0 4px rgba(0,0,0,.12);
+  transform:scale(1.08);
+}
+
+/* Custom cursor */
+.cur{
+  position:fixed;
+  left:0;
+  top:0;
+  width:58px;
+  height:58px;
+  margin:-29px 0 0 -29px;
+  z-index:100;
+  pointer-events:none;
+  display:grid;
+  place-items:center;
+  opacity:0;
+}
+.cur-ring{
+  position:absolute;
+  inset:0;
+  border-radius:50%;
+  border:1.5px solid rgba(255,255,255,.95);
+  background:rgba(255,255,255,.14);
+  -webkit-backdrop-filter:blur(6px);
+  backdrop-filter:blur(6px);
+  box-shadow:0 6px 20px -8px rgba(0,0,0,.35);
+  transition:transform .5s var(--ease),background-color .5s var(--ease),border-color .5s var(--ease);
+}
+.cur-dot{
+  width:6px;
+  height:6px;
+  border-radius:50%;
+  background:#fff;
+  transition:transform .4s var(--ease),opacity .4s var(--ease);
+}
+.cur-label{
+  position:relative;
+  z-index:2;
+  font:700 10px/1 var(--sans);
+  letter-spacing:.12em;
+  text-transform:uppercase;
+  opacity:0;
+  transform:scale(.65);
+  transition:opacity .45s var(--ease),transform .45s var(--ease);
+  pointer-events:none;
+}
+.cur-label.try{color:#111}
+.cur-label.drag{color:#fff;position:absolute}
+
+.cur.state-try .cur-ring{
+  transform:scale(1.5);
+  background:rgba(255,255,255,.92);
+}
+.cur.state-try .cur-dot{opacity:0;transform:scale(0)}
+.cur.state-try .cur-label.try{opacity:1;transform:scale(1)}
+
+.cur.state-drag .cur-ring{
+  transform:scale(1.2);
+}
+.cur.state-drag .cur-dot{opacity:0;transform:scale(0)}
+.cur.state-drag .cur-label.drag{opacity:1;transform:scale(1)}
+
+.cur.state-btn .cur-ring{transform:scale(.6)}
+.cur.state-down .cur-ring{transform:scale(1.05)}
+
+/* Roll animations */
+@keyframes rollOut{
+  from{transform:translateY(0)}
+  to{transform:translateY(-110%)}
+}
+@keyframes rollIn{
+  from{transform:translateY(110%)}
+  to{transform:translateY(0)}
+}
+@keyframes thumbPop{
+  from{transform:translateY(70%) scale(.8);opacity:.3}
+  to{transform:translateY(0) scale(1);opacity:1}
+}
+.anim-out{animation:rollOut 620ms cubic-bezier(.2,.8,.2,1) forwards}
+.anim-in{animation:rollIn 620ms cubic-bezier(.2,.8,.2,1) forwards}
+.anim-thumb{animation:thumbPop 650ms cubic-bezier(.2,.8,.2,1) forwards}
+
+/* Phones (<= 767px) */
+@media (max-width:767px){
+  :root{--MH:min(62vh,128vw);--CW:min(30vw,170px)}
+  .tabs button{height:32px;padding:0 13px;font-size:12px}
+  .tabs .pill{height:32px}
+  .rail{left:10px;top:auto;bottom:calc(4.6vh + 150px);transform:none;gap:8px;padding:6px}
+  .rail button{width:34px;height:34px}
+  .rail svg{width:17px;height:17px}
+  .arrow{display:none}
+  .buy{
+    flex-wrap:wrap;
+    gap:12px;
+    padding:12px 16px;
+    border-radius:20px;
+  }
+  .buy-controls{
+    width:100%;
+    justify-content:space-between;
+    gap:12px;
+  }
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion:reduce){
+  .tabs .pill,.rail button,.arrow,.size-chip,.dot,.cur-ring,.cur-dot,.cur-label,.card .tee-bg{
+    transition:none !important;
+  }
+  .card.sheen-run .sheen,.anim-out,.anim-in,.anim-thumb{
+    animation:none !important;
+  }
+}
+</style>
+</head>
+<body>
+
+<div class="room" id="room"></div>
+
+<div class="ghost" id="ghost" aria-hidden="true">
+  <span>F</span><span>I</span><span>T</span>
+</div>
+
+<nav class="tabs glass" id="tabs" aria-label="Categories">
+  <div class="pill" id="tabPill"></div>
+  <button type="button" class="on" data-tab="0">Western Tees</button>
+  <button type="button" data-tab="1">Sunset &amp; Heart</button>
+  <button type="button" data-tab="2">Rodeo &amp; Texas</button>
+  <button type="button" data-tab="3">Desert &amp; Dog</button>
+  <button type="button" data-tab="4">Studio Drops</button>
+</nav>
+
+<aside class="rail glass" id="rail" aria-label="Views">
+  <button type="button" class="on" data-btn title="Try-On Arc">
+    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M16.5 3 14 5.5A3.2 3.2 0 0 1 10 5.5L7.5 3 2 6.5l2.2 4.3L7 9.6V21h10V9.6l2.8 1.2L22 6.5 16.5 3Z"/></svg>
+  </button>
+  <button type="button" data-btn title="Bag">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M6 8h12l-1 12H7L6 8Z"/><path d="M9 8a3 3 0 0 1 6 0"/></svg>
+  </button>
+  <button type="button" data-btn title="Drop Schedule">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/></svg>
+  </button>
+  <button type="button" data-btn title="Profile">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="12" cy="8" r="4"/><path d="M4 20a8 8 0 0 1 16 0"/></svg>
+  </button>
+</aside>
+
+<main class="stage" id="stage">
+  <div class="arc" id="arc"></div>
+</main>
+
+<div class="model" id="model" aria-hidden="true">
+  <div class="outfit" id="mCur">
+    <div class="base-figure" id="mCurFig"></div>
+    <div class="chest-print"><img id="mCurPrint" alt=""></div>
+  </div>
+  <div class="outfit" id="mNext">
+    <div class="base-figure" id="mNextFig"></div>
+    <div class="chest-print"><img id="mNextPrint" alt=""></div>
+  </div>
+  <div class="grid" id="scanGrid"></div>
+  <div class="scan" id="scanLine"></div>
+</div>
+
+<button type="button" class="arrow prev glass" id="prevBtn" aria-label="Previous design" data-btn>
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="m15 18-6-6 6-6"/></svg>
+</button>
+<button type="button" class="arrow next glass" id="nextBtn" aria-label="Next design" data-btn>
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="m9 6 6 6-6 6"/></svg>
+</button>
+
+<section class="buy glass" id="buyCard" aria-label="Selected t-shirt">
+  <div class="buy-left">
+    <div class="thumb">
+      <div class="thumb-inner" id="thumbInner">
+        <img id="thumbImg" src="./assets/designs/Modern_Cowboy_Sunset.svg" alt="">
+      </div>
+    </div>
+    <div class="info">
+      <div class="ln title-ln" id="nameBox">
+        <span class="roll-text" id="nameText">Modern Cowboy Sunset</span>
+      </div>
+      <div class="ln price-ln" id="priceBox">
+        <span class="roll-text" id="priceText">$36</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="buy-controls">
+    <div>
+      <div class="group-label">Size</div>
+      <div class="sizes" id="sizes">
+        <button type="button" class="size-chip" data-size="S" data-btn>S</button>
+        <button type="button" class="size-chip on" data-size="M" data-btn>M</button>
+        <button type="button" class="size-chip" data-size="L" data-btn>L</button>
+        <button type="button" class="size-chip" data-size="XL" data-btn>XL</button>
+      </div>
+    </div>
+
+    <div>
+      <div class="group-label">
+        <span class="ln" id="colorBox" style="display:inline-block;vertical-align:bottom">
+          <span class="roll-text" id="colorText">Color · Cream</span>
+        </span>
+      </div>
+      <div class="dots" id="dots"></div>
+    </div>
+  </div>
+</section>
+
+<div class="cur" id="cursor" aria-hidden="true">
+  <div class="cur-ring"></div>
+  <div class="cur-dot"></div>
+  <span class="cur-label try">TRY ON</span>
+  <span class="cur-label drag">DRAG</span>
+</div>
+
+<script>
+(() => {
+  const ITEMS = [
+    {
+      n: "Modern Cowboy Sunset",
+      p: 36,
+      img: "./assets/designs/Modern_Cowboy_Sunset.svg",
+      m: 0.37,
+      c: [["Cream","#f4f2ee"],["Charcoal","#2b2c2f"],["Sand","#dfd3c0"],["Sunset","#e97a3e"]]
+    },
+    {
+      n: "Modern Cowboy Rodeo",
+      p: 38,
+      img: "./assets/designs/Modern_Cowboy_Rodeo.jpg",
+      m: 25.0,
+      c: [["Charcoal","#1f1f21"],["Faded Black","#343538"],["Oat","#dfd5c5"],["Rust","#b86538"]]
+    },
+    {
+      n: "Modern Cowboy Heart",
+      p: 36,
+      img: "./assets/designs/Modern_Cowboy_Heart.svg",
+      m: 49.86,
+      c: [["Cream","#f4f2ee"],["Rose","#d92857"],["Black","#1c1c1e"],["Ash","#c9c7c2"]]
+    },
+    {
+      n: "Modern Cowboy Texas",
+      p: 38,
+      img: "./assets/designs/Modern_Cowboy_Texas.jpg",
+      m: 74.77,
+      c: [["Black","#18181a"],["Terracotta","#c45b2b"],["Bone","#e8e2d5"],["Slate","#2d323b"]]
+    },
+    {
+      n: "Modern Cowboy Space Dog",
+      p: 40,
+      img: "./assets/designs/Modern_Cowboy_Space_Dog.jpg",
+      m: 99.35,
+      c: [["Obsidian","#171719"],["Stone","#b5aea2"],["Forest","#2f4236"],["Navy","#222c42"]]
+    }
+  ];
+
+  const TOTAL_CARDS = 10;
+  const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const isPhone = () => window.innerWidth <= 767;
+
+  const arcEl = document.getElementById("arc");
+  const stageEl = document.getElementById("stage");
+  const roomEl = document.getElementById("room");
+  const ghostSpans = [...document.querySelectorAll("#ghost span")];
+  const mCur = document.getElementById("mCur");
+  const mNext = document.getElementById("mNext");
+  const mCurFig = document.getElementById("mCurFig");
+  const mNextFig = document.getElementById("mNextFig");
+  const mCurPrint = document.getElementById("mCurPrint");
+  const mNextPrint = document.getElementById("mNextPrint");
+  const scanGrid = document.getElementById("scanGrid");
+  const scanLine = document.getElementById("scanLine");
+
+  const thumbInner = document.getElementById("thumbInner");
+  const thumbImg = document.getElementById("thumbImg");
+  const nameBox = document.getElementById("nameBox");
+  const priceBox = document.getElementById("priceBox");
+  const colorBox = document.getElementById("colorBox");
+  const dotsEl = document.getElementById("dots");
+
+  const cursorEl = document.getElementById("cursor");
+  const tabPill = document.getElementById("tabPill");
+  const tabButtons = [...document.querySelectorAll("#tabs button")];
+  const railButtons = [...document.querySelectorAll("#rail button")];
+
+  let pos = 0;
+  let target = 0;
+  let shownItemIdx = -1;
+  let intro = reducedMotion ? 1 : 0;
+
+  let pointerX = window.innerWidth * 0.5;
+  let pointerY = window.innerHeight * 0.5;
+  let curX = pointerX;
+  let curY = pointerY;
+  let sx = 0, sy = 0;
+  let tsx = 0, tsy = 0;
+
+  let dragging = false;
+  let dragStartX = 0;
+  let dragLastX = 0;
+  let dragLastT = 0;
+  let dragP0 = 0;
+  let flickVel = 0;
+  let movedDist = 0;
+  let overCard = false;
+  let overBtn = false;
+  let pointerDown = false;
+
+  let wheelAccum = 0;
+  let lastWheelStep = 0;
+  let scanAnims = [];
+
+  // Build 10 arc cards (2 copies of the 5 designs)
+  const cards = [];
+  for (let i = 0; i < TOTAL_CARDS; i++) {
+    const item = ITEMS[i % ITEMS.length];
+    const card = document.createElement("div");
+    card.className = "card glass";
+    card.dataset.cardIndex = String(i);
+    card.innerHTML = `
+      <div class="tee-bg"></div>
+      <div class="g"><img src="${item.img}" alt="${item.n}" draggable="false"></div>
+      <div class="name">${item.n}</div>
+      <div class="price">$${item.p}</div>
+      <div class="sheen"></div>
+    `;
+    card.addEventListener("pointerenter", () => {
+      overCard = true;
+      if (!reducedMotion) {
+        card.classList.remove("sheen-run");
+        void card.offsetWidth;
+        card.classList.add("sheen-run");
+      }
+      updateCursorState();
+    });
+    card.addEventListener("pointerleave", () => {
+      overCard = false;
+      updateCursorState();
+    });
+    arcEl.appendChild(card);
+    cards.push({ el: card, seed: i * 1.15 });
+  }
+
+  function mod(a, n) {
+    return ((a % n) + n) % n;
+  }
+
+  function getXTable() {
+    const W = window.innerWidth;
+    const ratios = isPhone()
+      ? [0, 0.36, 0.5, 0.56, 0.6, 0.62]
+      : [0, 0.215, 0.345, 0.432, 0.49, 0.52];
+    return ratios.map(r => r * W);
+  }
+
+  function xAt(a, xs) {
+    const clamped = Math.max(0, Math.min(xs.length - 1, a));
+    const idx = Math.floor(clamped);
+    if (idx >= xs.length - 1) return xs[xs.length - 1];
+    const frac = clamped - idx;
+    return xs[idx] + (xs[idx + 1] - xs[idx]) * frac;
+  }
+
+  function rollLabel(container, nextText, instant = false) {
+    const existing = container.querySelectorAll("span");
+    const currentText = existing.length ? existing[existing.length - 1].textContent : "";
+    if (currentText === nextText && existing.length === 1) return;
+
+    container.innerHTML = "";
+    if (instant || reducedMotion) {
+      const s = document.createElement("span");
+      s.className = "roll-text";
+      s.textContent = nextText;
+      container.appendChild(s);
+      return;
+    }
+
+    const oldSpan = document.createElement("span");
+    oldSpan.className = "roll-out anim-out";
+    oldSpan.textContent = currentText;
+
+    const newSpan = document.createElement("span");
+    newSpan.className = "roll-text anim-in";
+    newSpan.textContent = nextText;
+
+    container.appendChild(oldSpan);
+    container.appendChild(newSpan);
+
+    setTimeout(() => {
+      if (oldSpan.parentNode) oldSpan.remove();
+      newSpan.classList.remove("anim-in");
+    }, 640);
+  }
+
+  function applyShirtColor(hex) {
+    document.documentElement.style.setProperty("--tee-color", hex);
+  }
+
+  function renderColorDots(item) {
+    dotsEl.innerHTML = "";
+    item.c.forEach(([cname, hex], idx) => {
+      const dot = document.createElement("button");
+      dot.type = "button";
+      dot.className = "dot" + (idx === 0 ? " on" : "");
+      dot.style.background = hex;
+      dot.title = cname;
+      dot.setAttribute("aria-label", cname);
+      dot.dataset.btn = "1";
+      dot.addEventListener("pointerenter", () => { overBtn = true; updateCursorState(); });
+      dot.addEventListener("pointerleave", () => { overBtn = false; updateCursorState(); });
+      dot.addEventListener("click", (e) => {
+        e.stopPropagation();
+        dotsEl.querySelectorAll(".dot").forEach(d => d.classList.remove("on"));
+        dot.classList.add("on");
+        applyShirtColor(hex);
+        rollLabel(colorBox, `Color · ${cname}`);
+      });
+      dotsEl.appendChild(dot);
+    });
+    if (item.c[0]) {
+      applyShirtColor(item.c[0][1]);
+      rollLabel(colorBox, `Color · ${item.c[0][0]}`, shownItemIdx === -1);
+    }
+  }
+
+  function setFigureCrop(figEl, printEl, item) {
+    figEl.style.backgroundPosition = `${item.m}% 100%`;
+    printEl.src = item.img;
+    printEl.alt = item.n;
+  }
+
+  function runTryOn(itemIdx) {
+    shownItemIdx = itemIdx;
+    const item = ITEMS[itemIdx];
+
+    // 1. Update buy card
+    rollLabel(nameBox, item.n, reducedMotion);
+    rollLabel(priceBox, `$${item.p}`, reducedMotion);
+    renderColorDots(item);
+
+    thumbImg.src = item.img;
+    thumbImg.alt = item.n;
+    if (!reducedMotion) {
+      thumbInner.classList.remove("anim-thumb");
+      void thumbInner.offsetWidth;
+      thumbInner.classList.add("anim-thumb");
+    }
+
+    // Cancel running scan animations
+    scanAnims.forEach(a => { try { a.cancel(); } catch (_) {} });
+    scanAnims = [];
+
+    setFigureCrop(mNextFig, mNextPrint, item);
+
+    if (reducedMotion) {
+      setFigureCrop(mCurFig, mCurPrint, item);
+      mCur.style.opacity = "1";
+      mNext.style.clipPath = "inset(0 0 0% 0)";
+      scanGrid.style.clipPath = "inset(100% 0 0 0)";
+      scanLine.style.opacity = "0";
+      return;
+    }
+
+    const timing = { duration: 950, easing: "cubic-bezier(.65,0,.35,1)", fill: "forwards" };
+
+    const clipAnim = mNext.animate(
+      [{ clipPath: "inset(0 0 100% 0)" }, { clipPath: "inset(0 0 0% 0)" }],
+      timing
+    );
+
+    const gridAnim = scanGrid.animate(
+      [
+        { clipPath: "inset(0 0 100% 0)", offset: 0 },
+        { clipPath: "inset(0 0 0% 0)", offset: 0.5 },
+        { clipPath: "inset(100% 0 0 0)", offset: 1 }
+      ],
+      { duration: 1092, easing: "cubic-bezier(.65,0,.35,1)", fill: "forwards" }
+    );
+
+    const lineAnim = scanLine.animate(
+      [
+        { top: "0%", transform: "scaleX(.2)", opacity: 0, offset: 0 },
+        { top: "6%", transform: "scaleX(1)", opacity: 1, offset: 0.08 },
+        { top: "94%", transform: "scaleX(1)", opacity: 1, offset: 0.92 },
+        { top: "100%", transform: "scaleX(.2)", opacity: 0, offset: 1 }
+      ],
+      timing
+    );
+
+    const settleAnim = mNext.animate(
+      [{ transform: "scale(1.012)" }, { transform: "scale(1)" }],
+      { duration: 1250, easing: "ease-out", fill: "forwards" }
+    );
+
+    scanAnims = [clipAnim, gridAnim, lineAnim, settleAnim];
+
+    clipAnim.onfinish = () => {
+      setFigureCrop(mCurFig, mCurPrint, item);
+      mCur.style.opacity = "1";
+      scanAnims.forEach(a => { try { a.cancel(); } catch (_) {} });
+      scanAnims = [];
+      mNext.style.clipPath = "inset(0 0 100% 0)";
+    };
+  }
+
+  function stepBy(delta) {
+    target = Math.round(target) + delta;
+  }
+
+  function updateCursorState() {
+    cursorEl.classList.remove("state-try", "state-drag", "state-btn", "state-down");
+    if (pointerDown) cursorEl.classList.add("state-down");
+    if (dragging) {
+      cursorEl.classList.add("state-drag");
+    } else if (overBtn) {
+      cursorEl.classList.add("state-btn");
+    } else if (overCard) {
+      cursorEl.classList.add("state-try");
+    } else {
+      cursorEl.classList.add("state-drag");
+    }
+  }
+
+  // Tab pill positioning
+  function positionPill(btn) {
+    tabPill.style.width = `${btn.offsetWidth}px`;
+    tabPill.style.transform = `translateX(${btn.offsetLeft - 5}px)`;
+  }
+
+  tabButtons.forEach((btn, idx) => {
+    btn.dataset.btn = "1";
+    btn.addEventListener("pointerenter", () => { overBtn = true; updateCursorState(); });
+    btn.addEventListener("pointerleave", () => { overBtn = false; updateCursorState(); });
+    btn.addEventListener("click", () => {
+      tabButtons.forEach(b => b.classList.remove("on"));
+      btn.classList.add("on");
+      positionPill(btn);
+      target += 5;
+    });
+  });
+
+  railButtons.forEach(btn => {
+    btn.dataset.btn = "1";
+    btn.addEventListener("pointerenter", () => { overBtn = true; updateCursorState(); });
+    btn.addEventListener("pointerleave", () => { overBtn = false; updateCursorState(); });
+    btn.addEventListener("click", () => {
+      railButtons.forEach(b => b.classList.remove("on"));
+      btn.classList.add("on");
+    });
+  });
+
+  document.querySelectorAll("[data-btn]").forEach(el => {
+    el.addEventListener("pointerenter", () => { overBtn = true; updateCursorState(); });
+    el.addEventListener("pointerleave", () => { overBtn = false; updateCursorState(); });
+  });
+
+  document.querySelectorAll(".size-chip").forEach(chip => {
+    chip.addEventListener("click", () => {
+      document.querySelectorAll(".size-chip").forEach(c => c.classList.remove("on"));
+      chip.classList.add("on");
+    });
+  });
+
+  document.getElementById("prevBtn").addEventListener("click", () => stepBy(-1));
+  document.getElementById("nextBtn").addEventListener("click", () => stepBy(1));
+
+  // Pointer & drag input
+  window.addEventListener("pointermove", (e) => {
+    pointerX = e.clientX;
+    pointerY = e.clientY;
+    cursorEl.style.opacity = "1";
+    tsx = (e.clientX / window.innerWidth) - 0.5;
+    tsy = (e.clientY / window.innerHeight) - 0.5;
+
+    if (dragging) {
+      const now = performance.now();
+      const dt = Math.max(1, now - dragLastT);
+      const dx = e.clientX - dragStartX;
+      movedDist = Math.max(movedDist, Math.abs(dx));
+      flickVel = (e.clientX - dragLastX) / dt;
+      dragLastX = e.clientX;
+      dragLastT = now;
+
+      const xs = getXTable();
+      const stepPx = Math.max(40, xs[1] || 140);
+      pos = dragP0 - dx / stepPx;
+    }
+  });
+
+  stageEl.addEventListener("pointerdown", (e) => {
+    if (e.button !== 0 && e.pointerType === "mouse") return;
+    pointerDown = true;
+    dragging = true;
+    movedDist = 0;
+    flickVel = 0;
+    dragStartX = dragLastX = e.clientX;
+    dragLastT = performance.now();
+    dragP0 = pos;
+    updateCursorState();
+  });
+
+  window.addEventListener("pointerup", (e) => {
+    pointerDown = false;
+    if (dragging) {
+      dragging = false;
+      if (movedDist < 6) {
+        const cardEl = e.target.closest(".card");
+        if (cardEl) {
+          const ci = Number(cardEl.dataset.cardIndex);
+          const diff = mod(ci - Math.round(pos) + 5, 10) - 5;
+          target = Math.round(pos) + diff;
+        }
+      } else {
+        target = Math.round(pos - flickVel * 3.2);
+      }
+    }
+    updateCursorState();
+  });
+
+  // Wheel & keyboard input
+  window.addEventListener("wheel", (e) => {
+    const delta = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
+    wheelAccum += delta;
+    const now = performance.now();
+    if (Math.abs(wheelAccum) >= 60 && now - lastWheelStep >= 260) {
+      stepBy(wheelAccum > 0 ? 1 : -1);
+      wheelAccum = 0;
+      lastWheelStep = now;
+    }
+  }, { passive: true });
+
+  window.addEventListener("keydown", (e) => {
+    if (e.key === "ArrowLeft") stepBy(-1);
+    else if (e.key === "ArrowRight") stepBy(1);
+  });
+
+  window.addEventListener("resize", () => {
+    const activeTab = document.querySelector("#tabs button.on");
+    if (activeTab) positionPill(activeTab);
+  });
+
+  // Main animation loop
+  const t0 = performance.now();
+  function frame(now) {
+    const t = (now - t0) / 1000;
+    const H = window.innerHeight;
+
+    if (!dragging) {
+      if (reducedMotion) {
+        pos = target;
+      } else {
+        pos += (target - pos) * 0.11;
+      }
+    }
+
+    if (!reducedMotion && intro < 1) {
+      intro = Math.min(1, intro + 0.012);
+    }
+    const ie = reducedMotion ? 1 : 1 - Math.pow(1 - intro, 3);
+
+    sx += (tsx - sx) * 0.06;
+    sy += (tsy - sy) * 0.06;
+
+    // Cursor follow
+    curX += (pointerX - curX) * 0.22;
+    curY += (pointerY - curY) * 0.22;
+    cursorEl.style.transform = `translate3d(${curX}px, ${curY}px, 0)`;
+
+    // Room & ghost word parallax
+    roomEl.style.transform = `translate3d(${-sx * 22}px, ${-sy * 14}px, 0) scale(${1.08 - 0.03 * ie})`;
+    document.getElementById("ghost").style.transform =
+      `translate(calc(-50% - ${sx * 40}px), ${-sy * 16}px)`;
+
+    ghostSpans.forEach((sp, i) => {
+      const yOff = (1 - ie) * (60 + 30 * i);
+      sp.style.transform = `translateY(${yOff}px)`;
+    });
+
+    // Arc cards layout
+    const xs = getXTable();
+    for (let i = 0; i < TOTAL_CARDS; i++) {
+      const u = mod(i - pos + 5, 10) - 5;
+      const a = Math.abs(u);
+      const sg = u === 0 ? 0 : Math.sign(u);
+
+      const x = sg * xAt(a, xs) * ie;
+
+      let s, z, ry, blurPx = 0, op = 1;
+      if (a < 1) {
+        s = 0.55 + 0.45 * a;
+        z = -260 * (1 - a);
+        op = a;
+        ry = -sg * 16 * a;
+      } else {
+        s = 1 / (1 + 0.3 * Math.pow(a - 1, 1.15));
+        z = -110 * (a - 1);
+        ry = -sg * (16 + 9 * Math.min(2, a - 1));
+        blurPx = reducedMotion ? 0 : Math.max(0, a - 1.6) * 2.4;
+      }
+
+      if (a > 3.4) {
+        op = Math.min(op, 1 - (a - 3.4) / 0.8);
+      }
+      op = Math.max(0, op) * ie;
+
+      const bob = reducedMotion
+        ? 0
+        : Math.sin(t * 1.1 + cards[i].seed) * H * 0.006 * Math.min(1, a);
+      const y = bob - (1 - s) * H * 0.04;
+      ry += sx * 10;
+
+      const el = cards[i].el;
+      if (op < 0.01) {
+        el.style.opacity = "0";
+        el.style.visibility = "hidden";
+      } else {
+        el.style.visibility = "visible";
+        el.style.opacity = String(op);
+        el.style.zIndex = a < 1 ? "1" : String(Math.round(100 - 10 * a));
+        el.style.filter = blurPx > 0.05 ? `blur(${blurPx.toFixed(2)}px)` : "none";
+        el.style.transform =
+          `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px) ` +
+          `perspective(1300px) translateZ(${z.toFixed(1)}px) ` +
+          `rotateY(${ry.toFixed(2)}deg) rotateX(${(-sy * 6).toFixed(2)}deg) ` +
+          `scale(${(s * (0.6 + 0.4 * ie)).toFixed(4)})`;
+      }
+    }
+
+    // Settle check -> trigger scan
+    const settledItem = mod(Math.round(target), ITEMS.length);
+    if (!dragging && Math.abs(target - pos) < 0.02 && settledItem !== shownItemIdx) {
+      runTryOn(settledItem);
+    }
+
+    requestAnimationFrame(frame);
+  }
+
+  // Initial setup
+  positionPill(tabButtons[0]);
+  updateCursorState();
+  runTryOn(0);
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
